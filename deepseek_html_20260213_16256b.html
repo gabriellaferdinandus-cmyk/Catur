@@ -1,0 +1,454 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>♞ Game Catur - Vanilla JavaScript</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+            user-select: none;
+        }
+
+        body {
+            background: linear-gradient(145deg, #2b5a4c 0%, #1d3b33 100%);
+            font-family: 'Segoe UI', 'Arial', sans-serif;
+            min-height: 100vh;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            padding: 20px;
+        }
+
+        .game-container {
+            background: #3b2e24;
+            padding: 30px 30px 25px;
+            border-radius: 24px;
+            box-shadow: 0 20px 30px rgba(0,0,0,0.6);
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+        }
+
+        .status-panel {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            width: 100%;
+            margin-bottom: 20px;
+            color: #edebd7;
+            background: #4a3c2c;
+            padding: 12px 25px;
+            border-radius: 50px;
+            box-shadow: inset 0 2px 5px rgba(0,0,0,0.3);
+        }
+
+        .turn-indicator {
+            font-size: 1.5rem;
+            font-weight: bold;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .piece-emoji {
+            font-size: 1.8rem;
+        }
+
+        .restart-btn {
+            background: #c9a77d;
+            border: none;
+            color: #2d2d2d;
+            font-size: 1.2rem;
+            font-weight: bold;
+            padding: 8px 22px;
+            border-radius: 40px;
+            cursor: pointer;
+            box-shadow: 0 5px 0 #7e5a41, 0 6px 12px black;
+            transition: 0.07s;
+            border: 1px solid #efd7b5;
+            letter-spacing: 1px;
+        }
+
+        .restart-btn:active {
+            transform: translateY(5px);
+            box-shadow: 0 1px 0 #7e5a41, 0 6px 12px black;
+        }
+
+        .chessboard {
+            display: grid;
+            grid-template-columns: repeat(8, 70px);
+            grid-template-rows: repeat(8, 70px);
+            border: 8px solid #4f3a26;
+            border-radius: 8px;
+            box-shadow: 0 15px 25px #1f1f1f;
+        }
+
+        .square {
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            font-size: 45px;
+            font-weight: 500;
+            transition: 0.06s;
+            cursor: pointer;
+            text-shadow: 2px 4px 4px rgba(0,0,0,0.4);
+        }
+
+        .square.light {
+            background-color: #edd6b0;
+        }
+
+        .square.dark {
+            background-color: #b58863;
+        }
+
+        .square.selected {
+            background-color: #b3d9a0 !important;
+            box-shadow: inset 0 0 0 4px #367a36;
+        }
+
+        .square.legal-move {
+            background-color: #cbe6b1 !important;
+            box-shadow: inset 0 0 0 4px #5f8b4b;
+            position: relative;
+        }
+
+        .square.legal-move::after {
+            content: "●";
+            position: absolute;
+            color: #2c5e2c;
+            font-size: 24px;
+            opacity: 0.7;
+            text-shadow: 0 2px 3px black;
+        }
+
+        .capture-move::after {
+            content: "○" !important;
+            font-size: 36px !important;
+            color: #aa4444 !important;
+            font-weight: bold;
+        }
+
+        @media (max-width: 650px) {
+            .chessboard {
+                grid-template-columns: repeat(8, 45px);
+                grid-template-rows: repeat(8, 45px);
+            }
+            .square {
+                font-size: 32px;
+            }
+            .status-panel {
+                padding: 10px 18px;
+            }
+        }
+    </style>
+</head>
+<body>
+<div class="game-container">
+    <div class="status-panel">
+        <div class="turn-indicator">
+            <span>Giliran:</span>
+            <span id="turn-emoji" class="piece-emoji">⚪</span>
+            <span id="turn-text">Putih</span>
+        </div>
+        <button id="restartBtn" class="restart-btn">⟳ Mulai Ulang</button>
+    </div>
+    <div id="chessboard" class="chessboard"></div>
+    <div style="color: #e5dccc; margin-top: 15px; font-size: 1rem; font-style: italic;">
+        Klik bidak, lalu klik kotak hijau untuk bergerak / menangkap
+    </div>
+</div>
+
+<script>
+    // -------------------- Inisialisasi Papan Catur (Standard) --------------------
+    const initialBoard = [
+        ['♜', '♞', '♝', '♛', '♚', '♝', '♞', '♜'], // baris 0 (hitam)
+        ['♟', '♟', '♟', '♟', '♟', '♟', '♟', '♟'], // baris 1
+        ['', '', '', '', '', '', '', ''], // baris 2
+        ['', '', '', '', '', '', '', ''], // baris 3
+        ['', '', '', '', '', '', '', ''], // baris 4
+        ['', '', '', '', '', '', '', ''], // baris 5
+        ['♙', '♙', '♙', '♙', '♙', '♙', '♙', '♙'], // baris 6 (putih)
+        ['♖', '♘', '♗', '♕', '♔', '♗', '♘', '♖'] // baris 7
+    ];
+
+    // Simbol Putih = huruf besar, Hitam = huruf kecil (unicode)
+    // Putih: ♔♕♖♗♘♙ , Hitam: ♚♛♜♝♞♟
+
+    let board = JSON.parse(JSON.stringify(initialBoard)); // copy 2d
+    let currentTurn = 'w'; // 'w' untuk putih, 'b' untuk hitam
+    let selectedSquare = null; // { row, col }
+    let legalMoves = []; // array posisi { row, col }
+
+    // Elemen
+    const chessboardEl = document.getElementById('chessboard');
+    const turnEmoji = document.getElementById('turn-emoji');
+    const turnText = document.getElementById('turn-text');
+
+    // -------------------- Helper Functions --------------------
+    function isWhite(piece) {
+        if (!piece) return false;
+        // Potongan putih menggunakan Unicode range Putih: ♔♕♖♗♘♙
+        return ['♔', '♕', '♖', '♗', '♘', '♙'].includes(piece);
+    }
+
+    function isBlack(piece) {
+        if (!piece) return false;
+        return ['♚', '♛', '♜', '♝', '♞', '♟'].includes(piece);
+    }
+
+    function getPieceColor(piece) {
+        if (isWhite(piece)) return 'w';
+        if (isBlack(piece)) return 'b';
+        return null;
+    }
+
+    // Update giliran di UI
+    function updateTurnDisplay() {
+        if (currentTurn === 'w') {
+            turnEmoji.textContent = '♔';  // simbol putih
+            turnText.textContent = 'Putih';
+        } else {
+            turnEmoji.textContent = '♚';  // simbol hitam
+            turnText.textContent = 'Hitam';
+        }
+    }
+
+    // -------------------- Reset Game --------------------
+    function resetGame() {
+        board = JSON.parse(JSON.stringify(initialBoard));
+        currentTurn = 'w';
+        selectedSquare = null;
+        legalMoves = [];
+        renderBoard();
+        updateTurnDisplay();
+    }
+
+    // -------------------- Render Papan --------------------
+    function renderBoard() {
+        chessboardEl.innerHTML = '';
+        for (let row = 0; row < 8; row++) {
+            for (let col = 0; col < 8; col++) {
+                const piece = board[row][col];
+                const square = document.createElement('div');
+                square.className = `square ${(row + col) % 2 === 0 ? 'light' : 'dark'}`;
+                square.textContent = piece || '';
+                square.dataset.row = row;
+                square.dataset.col = col;
+
+                // Tandai kotak yang dipilih
+                if (selectedSquare && selectedSquare.row === row && selectedSquare.col === col) {
+                    square.classList.add('selected');
+                }
+
+                // Tandai langkah legal
+                if (legalMoves.some(move => move.row === row && move.col === col)) {
+                    square.classList.add('legal-move');
+                    // cek apakah itu adalah langkah menangkap (ada bidak lawan)
+                    if (piece && ((currentTurn === 'w' && isBlack(piece)) || (currentTurn === 'b' && isWhite(piece)))) {
+                        square.classList.add('capture-move');
+                    }
+                }
+
+                square.addEventListener('click', () => handleSquareClick(row, col));
+                chessboardEl.appendChild(square);
+            }
+        }
+    }
+
+    // -------------------- Logika Pergerakan --------------------
+    function isWithinBoard(row, col) {
+        return row >= 0 && row < 8 && col >= 0 && col < 8;
+    }
+
+    // Generate langkah untuk tipe bidak tertentu (TANPA mengecek skak, untuk kesederhanaan game ini fokus ke mekanik dasar)
+    function generateMoves(row, col) {
+        const piece = board[row][col];
+        if (!piece) return [];
+        const color = getPieceColor(piece);
+        if (color !== currentTurn) return []; // bukan giliran pemain
+
+        let moves = [];
+
+        switch (piece) {
+            // ---------- PAWN PUTIH (♙) ----------
+            case '♙':
+                // Maju satu
+                if (isWithinBoard(row - 1, col) && board[row - 1][col] === '') {
+                    moves.push({ row: row - 1, col });
+                    // Maju dua dari baris awal (baris 6)
+                    if (row === 6 && board[row - 2][col] === '') {
+                        moves.push({ row: row - 2, col });
+                    }
+                }
+                // Makan diagonal
+                [[-1, -1], [-1, 1]].forEach(([dr, dc]) => {
+                    const newRow = row + dr, newCol = col + dc;
+                    if (isWithinBoard(newRow, newCol)) {
+                        const target = board[newRow][newCol];
+                        if (target && isBlack(target)) moves.push({ row: newRow, col: newCol });
+                    }
+                });
+                break;
+
+            // ---------- PAWN HITAM (♟) ----------
+            case '♟':
+                if (isWithinBoard(row + 1, col) && board[row + 1][col] === '') {
+                    moves.push({ row: row + 1, col });
+                    if (row === 1 && board[row + 2][col] === '') {
+                        moves.push({ row: row + 2, col });
+                    }
+                }
+                [[1, -1], [1, 1]].forEach(([dr, dc]) => {
+                    const newRow = row + dr, newCol = col + dc;
+                    if (isWithinBoard(newRow, newCol)) {
+                        const target = board[newRow][newCol];
+                        if (target && isWhite(target)) moves.push({ row: newRow, col: newCol });
+                    }
+                });
+                break;
+
+            // ---------- KNIGHT (♘ putih, ♞ hitam) ----------
+            case '♘': case '♞':
+                const knightDeltas = [[-2, -1], [-2, 1], [-1, -2], [-1, 2], [1, -2], [1, 2], [2, -1], [2, 1]];
+                knightDeltas.forEach(([dr, dc]) => {
+                    const newRow = row + dr, newCol = col + dc;
+                    if (isWithinBoard(newRow, newCol)) {
+                        const target = board[newRow][newCol];
+                        if (!target || getPieceColor(target) !== color) moves.push({ row: newRow, col: newCol });
+                    }
+                });
+                break;
+
+            // ---------- BISHOP (♗ putih, ♝ hitam) ----------
+            case '♗': case '♝':
+                [[-1, -1], [-1, 1], [1, -1], [1, 1]].forEach(([dr, dc]) => {
+                    for (let i = 1; i < 8; i++) {
+                        const newRow = row + dr * i, newCol = col + dc * i;
+                        if (!isWithinBoard(newRow, newCol)) break;
+                        const target = board[newRow][newCol];
+                        if (!target) moves.push({ row: newRow, col: newCol });
+                        else {
+                            if (getPieceColor(target) !== color) moves.push({ row: newRow, col: newCol });
+                            break;
+                        }
+                    }
+                });
+                break;
+
+            // ---------- ROOK (♖ putih, ♜ hitam) ----------
+            case '♖': case '♜':
+                [[-1, 0], [1, 0], [0, -1], [0, 1]].forEach(([dr, dc]) => {
+                    for (let i = 1; i < 8; i++) {
+                        const newRow = row + dr * i, newCol = col + dc * i;
+                        if (!isWithinBoard(newRow, newCol)) break;
+                        const target = board[newRow][newCol];
+                        if (!target) moves.push({ row: newRow, col: newCol });
+                        else {
+                            if (getPieceColor(target) !== color) moves.push({ row: newRow, col: newCol });
+                            break;
+                        }
+                    }
+                });
+                break;
+
+            // ---------- QUEEN (♕ putih, ♛ hitam) ----------
+            case '♕': case '♛':
+                // Gabungan rook + bishop
+                [[-1, 0], [1, 0], [0, -1], [0, 1], [-1, -1], [-1, 1], [1, -1], [1, 1]].forEach(([dr, dc]) => {
+                    for (let i = 1; i < 8; i++) {
+                        const newRow = row + dr * i, newCol = col + dc * i;
+                        if (!isWithinBoard(newRow, newCol)) break;
+                        const target = board[newRow][newCol];
+                        if (!target) moves.push({ row: newRow, col: newCol });
+                        else {
+                            if (getPieceColor(target) !== color) moves.push({ row: newRow, col: newCol });
+                            break;
+                        }
+                    }
+                });
+                break;
+
+            // ---------- KING (♔ putih, ♚ hitam) ----------
+            case '♔': case '♚':
+                [[-1, -1], [-1, 0], [-1, 1], [0, -1], [0, 1], [1, -1], [1, 0], [1, 1]].forEach(([dr, dc]) => {
+                    const newRow = row + dr, newCol = col + dc;
+                    if (isWithinBoard(newRow, newCol)) {
+                        const target = board[newRow][newCol];
+                        if (!target || getPieceColor(target) !== color) moves.push({ row: newRow, col: newCol });
+                    }
+                });
+                break;
+        }
+        return moves;
+    }
+
+    // -------------------- Handler Klik Kotak --------------------
+    function handleSquareClick(row, col) {
+        const piece = board[row][col];
+        const pieceColor = piece ? getPieceColor(piece) : null;
+
+        // 1. Tidak ada kotak dipilih sebelumnya
+        if (!selectedSquare) {
+            // Pilih bidak hanya jika warnanya sesuai dengan giliran
+            if (piece && pieceColor === currentTurn) {
+                selectedSquare = { row, col };
+                legalMoves = generateMoves(row, col);
+                renderBoard();
+            }
+            return;
+        }
+
+        // 2. Ada kotak yang sudah dipilih
+        // Jika klik kotak yang sama -> batalkan pilihan
+        if (selectedSquare.row === row && selectedSquare.col === col) {
+            selectedSquare = null;
+            legalMoves = [];
+            renderBoard();
+            return;
+        }
+
+        // 3. Cek apakah langkah termasuk legal move
+        const isLegal = legalMoves.some(move => move.row === row && move.col === col);
+        if (isLegal) {
+            // Lakukan perpindahan
+            const fromRow = selectedSquare.row, fromCol = selectedSquare.col;
+            const movingPiece = board[fromRow][fromCol];
+            board[fromRow][fromCol] = '';
+            board[row][col] = movingPiece;
+
+            // Ganti giliran
+            currentTurn = currentTurn === 'w' ? 'b' : 'w';
+
+            // Hapus seleksi
+            selectedSquare = null;
+            legalMoves = [];
+            renderBoard();
+            updateTurnDisplay();
+        } else {
+            // Jika klik di kotak lain yang tidak legal, cek apakah memilih bidak sendiri yang baru
+            if (piece && pieceColor === currentTurn) {
+                // ganti seleksi ke bidak baru
+                selectedSquare = { row, col };
+                legalMoves = generateMoves(row, col);
+            } else {
+                // klik sembarang -> batalkan seleksi
+                selectedSquare = null;
+                legalMoves = [];
+            }
+            renderBoard();
+        }
+    }
+
+    // -------------------- Event Listener Restart --------------------
+    document.getElementById('restartBtn').addEventListener('click', resetGame);
+
+    // -------------------- Inisialisasi Awal --------------------
+    renderBoard();
+    updateTurnDisplay();
+</script>
+</body>
+</html>
